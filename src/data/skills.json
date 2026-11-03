@@ -1,0 +1,122 @@
+[
+  {
+    "id": "skill.following_instructions",
+    "en": "Following instructions",
+    "fr": "Compréhension des consignes"
+  },
+  {
+    "id": "skill.auditory_memory",
+    "en": "Auditory memory",
+    "fr": "Mémoire auditive"
+  },
+  {
+    "id": "skill.listening_comprehension",
+    "en": "Listening comprehension",
+    "fr": "Compréhension orale"
+  },
+  {
+    "id": "skill.vocabulary",
+    "en": "Vocabulary and word meaning",
+    "fr": "Vocabulaire et sens des mots"
+  },
+  {
+    "id": "skill.phonological_awareness",
+    "en": "Phonological awareness",
+    "fr": "Conscience phonologique"
+  },
+  {
+    "id": "skill.reading_comprehension",
+    "en": "Reading comprehension",
+    "fr": "Compréhension écrite"
+  },
+  {
+    "id": "skill.grammar",
+    "en": "Grammar and sentence structure",
+    "fr": "Grammaire et structure des phrases"
+  },
+  {
+    "id": "skill.spelling_punctuation",
+    "en": "Spelling and punctuation",
+    "fr": "Orthographe et ponctuation"
+  },
+  {
+    "id": "skill.number_sense",
+    "en": "Number sense",
+    "fr": "Sens du nombre"
+  },
+  {
+    "id": "skill.arithmetic",
+    "en": "Arithmetic",
+    "fr": "Calcul"
+  },
+  {
+    "id": "skill.word_problems",
+    "en": "Mathematical problem solving",
+    "fr": "Résolution de problèmes mathématiques"
+  },
+  {
+    "id": "skill.money",
+    "en": "Money and change",
+    "fr": "Monnaie et rendu de monnaie"
+  },
+  {
+    "id": "skill.time",
+    "en": "Time and duration",
+    "fr": "Heure et durée"
+  },
+  {
+    "id": "skill.measurement",
+    "en": "Measurement and units",
+    "fr": "Mesures et unités"
+  },
+  {
+    "id": "skill.geometry",
+    "en": "Shapes and spatial relationships",
+    "fr": "Formes et repérage spatial"
+  },
+  {
+    "id": "skill.patterns_logic",
+    "en": "Patterns and logical reasoning",
+    "fr": "Suites et raisonnement logique"
+  },
+  {
+    "id": "skill.fractions",
+    "en": "Fractions",
+    "fr": "Fractions"
+  },
+  {
+    "id": "skill.data_reasoning",
+    "en": "Data and combinations",
+    "fr": "Données et combinaisons"
+  },
+  {
+    "id": "skill.scientific_inquiry",
+    "en": "Observation and scientific inquiry",
+    "fr": "Observation et démarche scientifique"
+  },
+  {
+    "id": "skill.oral_expression",
+    "en": "Oral expression",
+    "fr": "Expression orale"
+  },
+  {
+    "id": "skill.written_expression",
+    "en": "Written expression",
+    "fr": "Expression écrite"
+  },
+  {
+    "id": "skill.cooperation",
+    "en": "Cooperation and social skills",
+    "fr": "Coopération et habiletés sociales"
+  },
+  {
+    "id": "skill.reflection",
+    "en": "Reflection and learning strategies",
+    "fr": "Réflexion et stratégies d’apprentissage"
+  },
+  {
+    "id": "skill.general",
+    "en": "General skills",
+    "fr": "Compétences générales"
+  }
+]

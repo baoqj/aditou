@@ -1,0 +1,11 @@
+import {chromium} from '@playwright/test';import assert from 'node:assert/strict';import {readFileSync,writeFileSync} from 'node:fs';
+const browser=await chromium.launch({headless:true}),page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));let posted;
+await page.route('**/api/**',async route=>{const r=route.request(),p=new URL(r.url()).pathname;if(p==='/api/auth/me')return route.fulfill({status:401,body:'{}'});if(p==='/api/support/checkout'){posted=r.postDataJSON();return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'support.unavailable'})})}return route.fulfill({status:200,body:'{}'})});
+const base=process.env.BASE_URL||'http://127.0.0.1:8796';
+for(const lang of ['en','fr','es','zh']){const t=JSON.parse(readFileSync('src/locales/'+lang+'.json','utf8'));for(const width of [1440,768,390,320]){
+ await page.setViewportSize({width,height:900});await page.goto(base+'/?lang='+lang);await page.locator('.support-coffee-button').waitFor();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'overflow '+lang+' '+width);
+ await page.locator('.support-coffee-button').click();await page.getByRole('dialog').waitFor();assert.equal(await page.locator('#support-title').textContent(),t['support.title']);assert.equal(await page.locator('.support-qr-grid img').count(),2);await page.waitForFunction(()=>Array.from(document.querySelectorAll('.support-qr-grid img')).every(img=>img.complete&&img.naturalWidth>0));
+ await page.getByRole('button',{name:t['support.amount'].replace('{{amount}}','2'),exact:true}).click();await page.getByRole('alert').waitFor();assert.equal(await page.getByRole('alert').textContent(),t['support.unavailable']);assert.deepEqual(posted,{amount:2,language:lang});
+ await page.screenshot({path:'artifacts/support-'+lang+'-'+width+'.png',fullPage:false});await page.keyboard.press('Escape');assert.equal(await page.locator('dialog').evaluate(el=>el.open),false);
+}}
+assert.deepEqual(errors,[]);writeFileSync('artifacts/support-browser-validation.json',JSON.stringify({languages:['en','fr','es','zh'],widths:[1440,768,390,320],qr:true,checkout:'mocked failure',errors},null,2));await browser.close();console.log('Support browser checks passed across four languages and four viewport widths.');

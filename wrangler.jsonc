@@ -1,0 +1,40 @@
+{
+  "name": "entryexam",
+  "account_id": "062e57f28565d961fb519fc3452dda6c",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-30",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true,
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "entryexam-db",
+      "database_id": "68644aee-ac1c-4c46-aaa1-89af71a66c4d",
+      "migrations_dir": "migrations",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "STORAGE",
+      "bucket_name": "entryexam-storage",
+    },
+  ],
+  "services": [{ "binding": "STUDYAI", "service": "studyainow-web" }],
+  "observability": {
+    "enabled": true,
+  },
+  "ai": {
+    "binding": "AI",
+  },
+  "vars": {
+    "RESEND_FROM_EMAIL": "Aditou <aditou@studyai.now>",
+    "RESEND_TEMPLATE_MODE": "published",
+    "TTS_GATEWAY_ID": "default",
+    "TTS_MODEL": "xai/grok-tts",
+    "TTS_VOICE": "ara",
+  },
+}
