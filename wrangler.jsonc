@@ -31,6 +31,7 @@
     "binding": "AI",
   },
   "vars": {
+    "SCHOOL_RANKINGS_PUBLIC": "1",
     "RESEND_FROM_EMAIL": "Aditou <aditou@studyai.now>",
     "RESEND_TEMPLATE_MODE": "published",
     "TTS_GATEWAY_ID": "default",

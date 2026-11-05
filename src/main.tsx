@@ -1,3 +1,9 @@
+import { VisitorTracker } from "./components/VisitorTracker";
+import { ClassroomAnalytics } from "./components/ClassroomAnalytics";
+import { ActivityTracker } from "./components/ActivityTracker";
+import { AnalyticsDashboard } from "./components/AnalyticsDashboard";
+import { ContactPage, FeedbackForm } from "./components/ContactPage";
+import { settingsDestination } from "./routing";
 import { AdminDirectory } from "./components/AdminDirectory";
 import { GoogleIcon } from "./components/GoogleIcon";
 import { OrganizationSettings } from "./components/OrganizationSettings";
@@ -23,6 +29,7 @@ import {
   Square,
   Volume2,
   ClipboardList,
+  MessageSquareText,
   Radio,
   Monitor,
   Settings,
@@ -49,7 +56,7 @@ import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "./components/LanguageSwitcher";
 import { PublicHeader } from "./components/PublicHeader";
 import { MarketingPage } from "./components/MarketingPage";
-import { authDestination } from "./routing";
+import { authDestination, canonicalPath } from "./routing";
 import { AccountMenu } from "./components/AccountMenu";
 import { QuestionPreparation } from "./components/QuestionPreparation";
 import { QuestionAudio } from "./components/QuestionAudio";
@@ -156,6 +163,9 @@ function Field({
     </label>
   );
 }
+const AdminOperations = React.lazy(() => import("./components/AdminOperations").then(({ AdminOperations }) => ({ default: AdminOperations })));
+const AdminSchools = React.lazy(() => import("./components/AdminSchools").then(({ AdminSchools }) => ({ default: AdminSchools })));
+
 function App() {
   useTranslation();
   const [user, setUser] = useState<Data | null>(null),
@@ -170,7 +180,7 @@ function App() {
     [assets, setAssets] = useState<Data[]>([]),
     [attempts, setAttempts] = useState<Data[]>([]),
     [tab, setTab] = useState(
-      () => location.pathname.split("/").filter(Boolean).at(-1) || "home",
+      () => location.pathname.replace(/\/+$/, "") === "/admin/schools" ? "admin/schools" : /^\/users\/[^/]+\/?$/.test(location.pathname) ? "users" : location.pathname.endsWith("/settings/contact") ? "settings" : canonicalPath(location.pathname.replace(/\/+$/, "")).split("/").filter(Boolean).at(-1) || "home",
     ),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
@@ -226,17 +236,14 @@ function App() {
     setRoomId("");
     setRunId("");
     setError("");
-    history.replaceState(
-      null,
-      "",
-      t === "home"
-        ? "/learn"
-        : staff
-          ? "/org/main/manage/" + t
-          : user?.role === "parent"
-            ? "/family"
-            : "/learn/" + t,
-    );
+    const path = t === "home" ? "/learn"
+      : staff ? "/" + t
+      : user?.role === "parent" ? (t === "settings" ? "/family/settings" : "/family")
+      : "/learn/" + t;
+    const language = new URLSearchParams(location.search).get("lang");
+    const url = new URL(path, location.origin);
+    if (language) url.searchParams.set("lang", language);
+    history.replaceState(null, "", url);
   }
   if (loading)
     return (
@@ -246,16 +253,28 @@ function App() {
       </div>
     );
   if (!user) return <LoginRedirect />;
+  const requested = canonicalPath(location.pathname.replace(/\/+$/, "") || "/");
+  if (authDestination(user.role, requested, location.origin) !== requested)
+    return <RouteMessage forbidden />;
   const published = questions.filter((q) => q.status === "published");
   const nav = staff
     ? [
-        ...(user.role === "admin" ? [["users", "admin.users", Users], ["organizations", "admin.organizations", Home]] : []),
+        ...(user.role === "admin" ? [
+          ["users", "admin.users", Users],
+          ["admin/schools", "schoolEval.manage", GraduationCap],
+          ["organization", "admin.organizations", Home],
+          ["feedback", "adminHub.feedback", MessageSquareText],
+          ["visitors", "adminHub.visitors", BarChart3],
+          ["system", "adminHub.system", Settings],
+        ] : [["organization", "admin.organizations", Home]]),
         ["bank", "Banque d’exercices", BookOpen],
-        ["roster", "Élèves et classes", Users],
-        ["class", "Classe en direct", Radio],
+        ["students", "Élèves", Users],
+        ["classes", "Classes", GraduationCap],
+        ["classroom", "Classe en direct", Radio],
         ["studio", "Studio audio", Mic],
         ["homework", "Devoirs et corrections", ClipboardList],
         ["reports", "Rapports", BarChart3],
+        ["settings", "account.settings", Settings],
       ]
     : user.role === "parent"
       ? [
@@ -268,7 +287,7 @@ function App() {
           ["progress", "Mes progrès", BarChart3],
         ];
   const allowedTabs = staff
-    ? ["bank", "roster", "class", "studio", "homework", "reports", "settings", ...(user.role === "admin" ? ["users", "organizations"] : [])]
+    ? [...nav.map(([key]) => key)]
     : user.role === "parent"
       ? ["family", "settings"]
       : ["home", "practice", "progress", "settings"];
@@ -341,6 +360,7 @@ function App() {
             email={user.email}
             busy={busy}
             onSettings={() => navigate("settings")}
+            onContact={() => location.assign(settingsDestination(user.role)+"/contact")}
             onLogout={() =>
               action(async () => {
                 await api("/auth/logout", {});
@@ -365,27 +385,20 @@ function App() {
                 <span>{t("Enseigner, écouter, progresser.")}</span>
               </div>
             )}
-            {nav.map(([key, label, Icon]: any) => (
-              <button
-                key={key}
-                onClick={() => navigate(key)}
-                className={currentTab === key ? "selected" : ""}
-              >
-                <Icon size={19} />
-                {t(label)}
-              </button>
+            {nav.map(([key, label, Icon]: any, index) => (
+              <React.Fragment key={key}>
+                {user.role==="admin" && (index===0 || key==="bank") && <h2 className="sidebar-section-title">
+                  {t(index===0 ? "adminHub.administrator" : "adminHub.general")}
+                </h2>}
+                <button
+                  onClick={() => navigate(key)}
+                  className={currentTab === key ? "selected" : ""}
+                >
+                  <Icon size={19} />
+                  {t(label)}
+                </button>
+              </React.Fragment>
             ))}
-            {staff && (
-              <button
-                className={
-                  "account-nav " + (currentTab === "settings" ? "selected" : "")
-                }
-                onClick={() => navigate("settings")}
-              >
-                <Settings size={19} />
-                {t("Mon compte")}
-              </button>
-            )}
             {staff && (
               <div className="sidebar-note">
                 <Headphones size={22} />
@@ -418,7 +431,7 @@ function App() {
               {t(notice)}
             </div>
           )}
-          {user.role === "admin" && ["users","organizations"].includes(currentTab) ? <AdminDirectory key={currentTab} kind={currentTab as "users" | "organizations"} selfId={user.id} /> : roomId ? (
+          {user.role === "admin" && ["feedback","visitors","system"].includes(currentTab) ? <React.Suspense fallback={<p role="status">{t("feedback.loading")}</p>}><AdminOperations page={currentTab} /></React.Suspense> : user.role === "admin" && currentTab === "admin/schools" ? <React.Suspense fallback={<p role="status">{t("feedback.loading")}</p>}><AdminSchools /></React.Suspense> : user.role === "admin" && ["users","organization"].includes(currentTab) ? <AdminDirectory key={currentTab} kind={currentTab === "users" ? "users" : "organizations"} selfId={user.id} /> : roomId ? (
             <LiveRoom
               id={roomId}
               staff={!!staff}
@@ -474,6 +487,12 @@ function App() {
             <>
               {currentTab === "home" && (
                 <>
+                  {!!boot.reminders?.length && <section className="card">
+                    <h2>{t("roster.reminders")}</h2>
+                    <ul>{boot.reminders.map((reminder: Data) => <li key={reminder.id}>
+                      {t("roster.reminderMessage", { name: reminder.name })} · {reminder.created_at.slice(0, 10)}
+                    </li>)}</ul>
+                  </section>}
                   <div className="welcome-row">
                     <div>
                       <div className="eyebrow">
@@ -680,40 +699,7 @@ function App() {
                   <AssessmentHistory accountKey={user.id} onOpen={setRunId} />
                 </>
               )}
-              {(currentTab === "progress" || currentTab === "reports") && (
-                <>
-                  <PageTitle
-                    eyebrow={
-                      staff
-                        ? t("COMPRENDRE LES APPRENTISSAGES")
-                        : t("CHAQUE ESSAI COMPTE")
-                    }
-                    title={
-                      staff ? t("Rapports d’apprentissage") : t("Mes progrès")
-                    }
-                    subtitle={
-                      staff
-                        ? t(
-                            "Uniquement les réponses des classes et des devoirs autorisés.",
-                          )
-                        : t(
-                            "Tes découvertes, tes essais et les prochaines étapes.",
-                          )
-                    }
-                  />
-                  <Progress
-                    attempts={attempts}
-                    staff={!!staff}
-                    onRetry={(a) => {
-                      const q = questions.find(
-                        (q) =>
-                          q.id === a.question_id && q.status === "published",
-                      );
-                      if (q) start(q);
-                    }}
-                  />
-                </>
-              )}
+              {(currentTab === "progress" || currentTab === "reports") && <AnalyticsDashboard user={user} onPractice={(skill,locale,grade)=>location.assign("/learn/practice?"+new URLSearchParams({skill,locale,grade}).toString())}/>}
               {currentTab === "bank" && (
                 <>
                   <PageTitle
@@ -737,8 +723,11 @@ function App() {
                   />
                 </>
               )}
-              {currentTab === "roster" && (
+              {currentTab === "organization" && user.role === "teacher" && <OrganizationSettings />}
+              {["students", "classes"].includes(currentTab) && (
                 <Roster
+                  key={currentTab}
+                  view={currentTab === "classes" ? "classes" : "students"}
                   boot={boot}
                   busy={busy}
                   action={action}
@@ -835,7 +824,7 @@ function App() {
                   />
                 </>
               )}
-              {currentTab === "class" && (
+              {currentTab === "classroom" && (
                 <>
                   <PageTitle
                     eyebrow={t("ENSEIGNER ENSEMBLE")}
@@ -923,11 +912,12 @@ function App() {
                   notify={setNotice}
                 />
               )}
-              {currentTab === "settings" && (
+              {currentTab === "settings" && location.pathname.endsWith("/contact") && <><a href={settingsDestination(user.role)}>{t("account.settings")}</a><FeedbackForm user={user}/></>}
+              {currentTab === "settings" && !location.pathname.endsWith("/contact") && (
                 <>
                   <PageTitle
                     eyebrow={t("VOTRE ESPACE")}
-                    title={t("Mon compte")}
+                    title={t("account.settings")}
                     subtitle={t("Gérez vos informations de connexion.")}
                   />
                   <section className="card account-card">
@@ -937,7 +927,7 @@ function App() {
                     <h3>{user.name}</h3>
                     <p>{user.email}</p>
                     <Badge value={t(roles[user.role])} />
-                    {user.role === "teacher" && <OrganizationSettings/>}
+                    <p><a href={settingsDestination(user.role)+"/contact"}>{t("feedback.title")}</a></p>
                     <h3 className="spaced">{t("Changer mon mot de passe")}</h3>
                     <p><a href="/forgot-password">{t("email.forgotTitle")}</a></p>
                     <form
@@ -1083,10 +1073,20 @@ function Auth({
 }) {
   const register = mode === "signup";
   const [verificationEmail, setVerificationEmail] = useState("");
+  const [registrationOpen,setRegistrationOpen] = useState<boolean|null>(null);
+  const [registrationRetry,setRegistrationRetry] = useState(0);
   const [googleRole, setGoogleRole] = useState(new URLSearchParams(location.search).get("role") === "teacher" ? "teacher" : "student");
   const googleError = new URLSearchParams(location.search).get("error");
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  useEffect(()=>{
+    if(!register)return;
+    let active=true;
+    setRegistrationOpen(null);
+    api("/site/settings").then(data=>{if(active)setRegistrationOpen(data.registrationOpen);})
+      .catch(()=>{if(active)setError("system.loadFailed");});
+    return ()=>{active=false;};
+  },[register,registrationRetry]);
   if (verificationEmail) return <EmailActions mode="check-email" email={verificationEmail}/>;
   return (
     <>
@@ -1135,9 +1135,12 @@ function Auth({
                 ? t("Créez votre espace pour commencer.")
                 : t("Connectez-vous pour poursuivre vos découvertes.")}
             </p>
+            {register && registrationOpen===false && <p role="status">{t("system.registrationPaused")}</p>}
+            {register && error==="system.loadFailed" && <button type="button" onClick={()=>{setError("");setRegistrationRetry(value=>value+1);}}>{t("schoolEval.retry")}</button>}
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
+                if(register && registrationOpen!==true){setError("system.registrationPaused");return;}
                 setBusy(true);
                 setError("");
                 const f = Object.fromEntries(new FormData(e.currentTarget));
@@ -1209,7 +1212,7 @@ function Auth({
                   {t(error)}
                 </div>
               )}
-              <button className="btn full" disabled={busy}>
+              <button className="btn full" disabled={busy || (register && registrationOpen!==true)}>
                 {busy
                   ? t("Un instant…")
                   : register
@@ -1218,8 +1221,8 @@ function Auth({
                 <ArrowRight size={18} />
               </button>
             </form>
-            <a className="btn full google-login" href={"/api/auth/google/start?" + new URLSearchParams({signup: register ? "1" : "0", role: googleRole, locale: i18n.resolvedLanguage || "fr", next: new URLSearchParams(location.search).get("next") || ""}).toString()}><GoogleIcon/>{t("auth.google")}</a>
-            {googleError && <div className="alert error" role="alert">{t(googleError === "google_signup_required" ? "auth.googleSignupRequired" : "auth.googleFailed")}</div>}
+            {(!register || registrationOpen===true) && <a className="btn full google-login" href={"/api/auth/google/start?" + new URLSearchParams({signup: register ? "1" : "0", role: googleRole, locale: i18n.resolvedLanguage || "fr", next: new URLSearchParams(location.search).get("next") || ""}).toString()}><GoogleIcon/>{t("auth.google")}</a>}
+            {googleError && <div className="alert error" role="alert">{t(googleError === "registration_paused" ? "system.registrationPaused" : googleError === "google_signup_required" ? "auth.googleSignupRequired" : "auth.googleFailed")}</div>}
             {!register && <p className="auth-switch"><a href="/forgot-password">{t("email.forgotTitle")}</a>{" · "}<a href="/resend-verification">{t("email.resend")}</a></p>}
             <div className="auth-switch">
               {register ? t("Déjà un compte ?") : t("Première visite ?")}{" "}
@@ -1349,12 +1352,12 @@ function Catalog({
   onStartExam?: (qs: Data[]) => void;
 }) {
   const [search, setSearch] = useState(""),
-    [grade, setGrade] = useState(initialGrade),
+    [grade, setGrade] = useState(() => student ? new URLSearchParams(location.search).get("grade") || initialGrade : initialGrade),
     [locale, setLocale] = useState(
-      () => { if(!student) return ""; try { const saved=localStorage.getItem("aditou.exercise-language"); return saved === "en-CA" || saved === "" ? saved : "fr-CA"; } catch { return "fr-CA"; } },
+      () => { if(!student) return ""; const linked=new URLSearchParams(location.search).get("locale"); if(linked === "fr-CA" || linked === "en-CA") return linked; try { const saved=localStorage.getItem("aditou.exercise-language"); return saved === "en-CA" || saved === "" ? saved : "fr-CA"; } catch { return "fr-CA"; } },
     ),
     [status, setStatus] = useState(""),
-    [module, setModule] = useState(""),
+    [module, setModule] = useState(() => student ? new URLSearchParams(location.search).get("skill") || "" : ""),
     [page, setPage] = useState(0);
   const filtered = questions.filter(
     (q) =>
@@ -1842,6 +1845,7 @@ function Player({
   }, [q.id, result, busy, disabled]);
   return (
     <div className="player-page">
+      <ActivityTracker questionId={q.id} context={activity?.context || "private"} contextId={activity?.id || ""} enabled={!result&&!disabled}/>
       <div className="player-top">
         <button className="text-button" onClick={onBack}>
           <ArrowLeft size={17} />
@@ -2649,6 +2653,7 @@ function ActivityEditor({
   );
 }
 function Roster({
+  view,
   boot,
   busy,
   action,
@@ -2656,6 +2661,7 @@ function Roster({
   user,
   notify,
 }: {
+  view: "students" | "classes";
   boot: Data;
   busy: boolean;
   action: (f: () => Promise<void>) => void;
@@ -2676,41 +2682,24 @@ function Roster({
     <>
       <PageTitle
         eyebrow={t("UNE PLACE POUR CHAQUE ÉLÈVE")}
-        title={t("Élèves et classes")}
+        title={t(view === "classes" ? "Classes" : "Élèves")}
         subtitle={t(
           "Des identités durables, des groupes pour apprendre ensemble.",
         )}
         action={
           <div className="button-row">
-            <button className="btn secondary" onClick={() => setModal("class")}>
+            {view === "classes" && <button className="btn secondary" onClick={() => setModal("class")}>
               <Plus size={17} />
               {t("Nouvelle classe")}
-            </button>
-            <button className="btn" onClick={() => setModal("student")}>
+            </button>}
+            {view === "students" && user.role === "admin" && <button className="btn" onClick={() => setModal("student")}>
               <Plus size={17} />
               {t("Ajouter un compte")}
-            </button>
+            </button>}
           </div>
         }
       />
-      <div className="stats-row">
-        <Stat
-          label={t("Élèves")}
-          value={roster.students.length}
-          icon={<Users />}
-        />
-        <Stat
-          label={t("Classes")}
-          value={boot.classes.length}
-          icon={<BookOpen />}
-        />
-        <Stat
-          label={t("Enseignants")}
-          value={roster.teachers.length || 1}
-          icon={<GraduationCap />}
-        />
-      </div>
-      <div className="assignment-grid">
+      {view === "classes" ? <div className="assignment-grid">
         {boot.classes.map((c: Data) => (
           <section className="card" key={c.id}>
             <IconTile color="green">
@@ -2729,9 +2718,7 @@ function Roster({
           </section>
         ))}
       </div>
-      <div className="section-head">
-        <h2>{t("Le carnet des élèves")}</h2>
-      </div>
+      :
       <div className="table-wrap">
         <table>
           <thead>
@@ -2753,15 +2740,33 @@ function Roster({
                 <td>{s.classes || t("Sans classe")}</td>
                 <td>
                   <div className="button-row">
-                    <button
+                    {user.role === "admin" && <button
                       className="text-button"
                       onClick={() => {
                         setModal("enroll:" + s.id);
                       }}
                     >
                       {t("Inscrire")}
-                    </button>
-                    <button
+                    </button>}
+                    {user.role === "admin" && <button className="text-button" onClick={() =>
+                      action(async () => {
+                        await api("/admin/users/" + s.account_id, { disabled: !s.disabled });
+                        await load();
+                      })
+                    }>{t(s.disabled ? "admin.restore" : "admin.disable")}</button>}
+                    {roster.organization && <button className="text-button" onClick={() =>
+                      action(async () => {
+                        await api("/roster/status", { learner_id: s.id, active: !s.organization_active });
+                        await load();
+                      })
+                    }>{t(s.organization_active ? "admin.disable" : "admin.restore")}</button>}
+                    {user.role === "teacher" && !roster.organization && <button className="text-button" disabled={busy} onClick={() =>
+                      action(async () => {
+                        await api("/roster/reminders", { learner_id: s.id });
+                        notify("roster.reminderSent");
+                      })
+                    }>{t("roster.remind")}</button>}
+                    {!roster.organization && <button
                       className="text-button"
                       onClick={() =>
                         action(async () => {
@@ -2774,7 +2779,7 @@ function Roster({
                       }
                     >
                       {t("Invitation parent")}
-                    </button>
+                    </button>}
                   </div>
                 </td>
               </tr>
@@ -2788,7 +2793,7 @@ function Roster({
             )}
           </Empty>
         )}
-      </div>
+      </div>}
       {modal === "student" && (
         <Modal title={t("Créer un compte")} close={() => setModal("")}>
           <form
@@ -3187,8 +3192,7 @@ function LiveRoom({
           ) : undefined
         }
       />
-      {staff ? (
-        <>
+      {staff ? (projector ? null : <>
           <div className="live-grid">
             <section className="card">
               <div className="section-head">
@@ -3266,6 +3270,7 @@ function LiveRoom({
               </div>
             </section>
             <section className="card">
+              <ClassroomAnalytics targets={data.targets || []} attempts={data.attempts} released={["closed","revealed","ended"].includes(c.phase)} objective={["numeric","qcm","multiple","order","matching"].includes(q?.response_type)}/>
               <h3>{t("Le pouls de la classe")}</h3>
               <div className="live-count">
                 {data.attempts.length}
@@ -3423,6 +3428,7 @@ function Studio({
       const initial = questions.find((item) => item.id === qid);
       return initial ? { ...initial } : null;
     }),
+    [defaults,setDefaults] = useState({model:"xai/grok-tts",voice:"ara"}),
     [models, setModels] = useState<Data[]>([]),
     [preferences, setPreferences] = useState<Data[]>([]),
     [model, setModel] = useState("xai/grok-tts"),
@@ -3471,9 +3477,10 @@ function Studio({
         if (live) {
           setModels(b.models);
           setPreferences(b.settings);
+          setDefaults({model:b.ttsModel,voice:b.ttsVoice});
           const saved = b.settings.find((p: Data) => p.question_id === qid);
-          setModel(saved?.model || "xai/grok-tts");
-          setVoice(saved?.voice || "ara");
+          setModel(saved?.model || b.ttsModel);
+          setVoice(saved?.voice || b.ttsVoice);
         }
       })
       .catch((e) => onError(e.message));
@@ -3521,8 +3528,8 @@ function Studio({
     setQid(next.id);
     setDraft({ ...next });
     const preference = preferences.find((p) => p.question_id === next.id);
-    setModel(preference?.model || "xai/grok-tts");
-    setVoice(preference?.voice || "ara");
+    setModel(preference?.model || defaults.model);
+    setVoice(preference?.voice || defaults.voice);
     if (innerWidth < 760)
       requestAnimationFrame(() =>
         editorRef.current?.scrollIntoView({
@@ -4123,10 +4130,24 @@ function LoginRedirect() {
   }, []);
   return <div className="loading">{t("Ouverture de ton atelier…")}</div>;
 }
+const SchoolPage = React.lazy(() => import("./components/SchoolPage").then(({ SchoolPage }) => ({ default: SchoolPage })));
+
+function RouteMessage({ forbidden = false }: { forbidden?: boolean }) {
+  useTranslation();
+  return <><PublicHeader /><main className="contact-page school-page">
+    <h1>{t(forbidden ? "routing.forbidden" : "routing.missing")}</h1>
+    <a href="/">{t("marketing.home")}</a>
+  </main></>;
+}
 function Root() {
   const { i18n: current } = useTranslation();
-  const path = location.pathname.replace(/\/+$/, "") || "/";
+  const incoming = location.pathname.replace(/\/+$/, "") || "/";
+  const path = canonicalPath(incoming);
   useEffect(() => {
+    if (incoming !== path) history.replaceState(history.state, "", path + location.search + location.hash);
+  }, [incoming, path]);
+  useEffect(() => {
+    if (path === "/school" || path.startsWith("/school/")) return;
     const section =
       path === "/"
         ? "marketing"
@@ -4159,6 +4180,12 @@ function Root() {
     }
   }, [path]);
   if (["/verify-email","/forgot-password","/reset-password","/resend-verification"].includes(path)) return <EmailActions mode={path === "/resend-verification" ? "check-email" : path.slice(1) as "verify-email"|"forgot-password"|"reset-password"}/>;
+  if (/^\/school(?:\/[a-z0-9-]+)?\/?$/i.test(path)) return (
+    <React.Suspense fallback={<div className="loading" role="status">{t("feedback.loading")}</div>}>
+      <SchoolPage />
+    </React.Suspense>
+  );
+  if (path === "/contact") return <ContactPage />;
   if (path === "/") return <MarketingPage />;
   if (path === "/login" || path === "/signup")
     return (
@@ -4175,6 +4202,8 @@ function Root() {
         }}
       />
     );
-  return <App />;
+  if (/^\/(?:feedback|visitors|system|admin\/schools|users(?:\/[^/]+)?|organization|bank|students|classes|classroom|studio|homework|reports|settings(?:\/contact)?|learn(?:\/(?:practice|progress|settings(?:\/contact)?))?|family(?:\/settings(?:\/contact)?)?)$/.test(path))
+    return <App />;
+  return <RouteMessage />;
 }
-createRoot(document.getElementById("root")!).render(<Root />);
+createRoot(document.getElementById("root")!).render(<><VisitorTracker /><Root /></>);

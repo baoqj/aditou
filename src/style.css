@@ -4561,3 +4561,38 @@ details p {
 .admin-edit label {display:grid;gap:8px;margin-bottom:24px}
 .admin-edit .admin-row-actions {justify-content:flex-end;margin-top:24px}
 @media(max-width:600px){.admin-directory-filters>*{width:100%;max-width:none!important}.admin-directory-title{align-items:flex-start}.admin-directory td,.admin-directory th{padding:12px}}
+
+.contact-page {max-width: 760px; margin: 32px auto; padding: 0 16px 32px;}
+.feedback-card {width:100%;max-width:760px; margin:16px 0; padding:clamp(18px,4vw,32px);}
+.feedback-card h1 {margin-top:0;}
+.feedback-card form {display:grid;gap:16px;}
+.feedback-card label {display:grid;gap:6px;font-weight:600;}
+.feedback-card input,.feedback-card textarea {width:100%;box-sizing:border-box;min-width:0;}
+.feedback-card textarea {resize:vertical;min-height:160px;}
+.feedback-card input[readonly] {background:#edf2f7;color:#475569;}
+.feedback-card small {color:#52647b;}
+.feedback-card button {justify-self:end;}
+@media(max-width:600px){.public-header-actions {flex-wrap:wrap;gap:8px;}.public-header-inner {flex-wrap:wrap;}.contact-page {margin-top:16px;}}
+
+.admin-user-row { cursor: pointer; }
+.admin-user-row:hover { background: #f2f8f6; }
+.admin-user-detail dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 16px; }
+.admin-user-detail dt { color: #526a65; font-size: .85rem; }
+.admin-user-detail dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+
+.sidebar > .sidebar-section-title {
+  margin: 10px 12px 3px;
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  font-weight: 800;
+  color: #385b91;
+  flex-shrink: 0;
+}
+@media (max-width:800px) {
+  .sidebar > .sidebar-section-title {
+    margin: 0 4px;
+    font-size: 9px;
+    max-width: 90px;
+    white-space: normal;
+  }
+}

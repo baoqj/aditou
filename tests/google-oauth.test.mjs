@@ -10,9 +10,14 @@ const transpile = (file) =>
     },
   }).outputText;
 const code =
+  transpile("../worker/tts-settings.ts") +
+  "\n" +
+  transpile("../worker/system-settings.ts").replace(/^import .*;\n/gm, "") +
+  "\n" +
   transpile("../worker/email-locale.ts") +
   "\n" +
   transpile("../worker/google-oauth.ts")
+    .replace(/import .*system-settings.*\n/, "")
     .replace(/import .*email-locale.*\n/, "")
     .replace(/import .*authDestination.*\n/, "")
     .replace(
@@ -113,5 +118,90 @@ test("Google OAuth keeps the selected UI locale in the server-side state", async
       e.calls.find((c) => c.sql.startsWith("INSERT")).args[8],
       locale,
     );
+  }
+});
+
+test("A registration pause blocks new Google accounts while existing Google users can sign in", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url) =>
+    String(url).includes("/token")
+      ? Response.json({ access_token: "fixture" })
+      : Response.json({
+          sub: "google-user",
+          email: "existing@example.invalid",
+          email_verified: true,
+          name: "Existing",
+        });
+  try {
+    for (const existing of [false, true]) {
+      const writes = [];
+      const environment = {
+        GOOGLE_CLIENT_ID: "fixture",
+        GOOGLE_CLIENT_SECRET: "fixture",
+        DB: {
+          prepare(sql) {
+            return {
+              bind() {
+                return this;
+              },
+              async first() {
+                if (sql.startsWith("DELETE FROM google_oauth_states"))
+                  return {
+                    signup: 1,
+                    verifier: "fixture",
+                    next_path: "/learn",
+                    locale: "en",
+                  };
+                if (sql.startsWith("SELECT a.*") && existing)
+                  return {
+                    id: "user",
+                    email: "existing@example.invalid",
+                    name: "Existing",
+                    role: "student",
+                  };
+                if (sql.includes("FROM system_configuration"))
+                  return {
+                    registration_open: 0,
+                    tts_model: null,
+                    tts_voice: null,
+                    version: 1,
+                  };
+                return null;
+              },
+              async run() {
+                writes.push(sql);
+                return {};
+              },
+            };
+          },
+          async batch() {
+            throw Error("New account creation was not expected");
+          },
+        },
+      };
+      const response = await googleOAuth(
+        new Request(
+          "https://aditou.studyai.now/api/auth/google/callback?state=fixture&code=fixture",
+          { headers: { Cookie: "aditou_oauth=binding" } },
+        ),
+        environment,
+      );
+      const destination = new URL(response.headers.get("location"));
+      assert.equal(response.status, 302);
+      if (existing) {
+        assert.equal(destination.pathname, "/learn");
+        assert.ok(
+          writes.some((sql) => sql.startsWith("INSERT INTO auth_sessions")),
+        );
+      } else {
+        assert.equal(
+          destination.searchParams.get("error"),
+          "registration_paused",
+        );
+        assert.equal(writes.length, 0);
+      }
+    }
+  } finally {
+    globalThis.fetch = original;
   }
 });

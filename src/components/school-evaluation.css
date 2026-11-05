@@ -1,0 +1,235 @@
+.school-eval-contributions,
+.school-eval-charts,
+.school-eval-trends,
+.school-eval-review-summary {
+  display: grid;
+  gap: 16px;
+}
+.school-eval-contributions {
+  margin-top: 16px;
+}
+.school-eval-contributions > section {
+  scroll-margin-top: 90px;
+  min-width: 0;
+}
+.school-eval-charts {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr));
+  align-items: start;
+  margin: 14px 0;
+}
+.school-eval-review-summary {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+  align-items: start;
+  margin: 16px 0;
+}
+.school-eval-controls {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-block: 8px;
+}
+.school-eval-controls label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+.school-eval-controls select {
+  max-width: 100%;
+}
+.school-eval-chart {
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--school-line);
+  border-radius: 6px;
+  background: var(--school-wash);
+}
+.school-eval-chart figcaption {
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.school-eval-chart svg {
+  display: block;
+  width: 100%;
+  max-height: 215px;
+  margin: auto;
+}
+.school-eval-chart svg text {
+  fill: var(--school-ink);
+  font-size: 11px;
+}
+.school-eval-gridline {
+  stroke: #aabbd9;
+  fill: none;
+}
+.school-eval-polygon {
+  stroke: var(--school-blue);
+  stroke-width: 2;
+  fill: #4874d540;
+}
+.school-eval-series,
+.school-eval-point {
+  stroke: var(--school-blue);
+  stroke-width: 2;
+  fill: var(--school-blue);
+}
+.school-eval-point.is-provisional {
+  fill: white;
+}
+.school-eval-legend,
+.school-eval-trend-values,
+.school-eval-review-list {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+}
+.school-eval-legend li {
+  margin-block: 4px;
+}
+.school-eval-legend li > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.school-eval-legend strong {
+  flex-shrink: 0;
+}
+.school-eval-index {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  margin-inline-end: 4px;
+}
+.school-eval-legend meter {
+  display: block;
+  width: 100%;
+  height: 12px;
+  accent-color: var(--school-blue);
+}
+.school-eval-legend meter::-webkit-meter-optimum-value {
+  background: var(--school-blue);
+}
+.school-eval-trend-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 12px;
+}
+.school-eval-review-list li,
+.school-eval-my-review,
+.school-eval-review-form {
+  border: 1px solid var(--school-line);
+  border-radius: 6px;
+  margin-block: 10px;
+  padding: 12px;
+  overflow-wrap: anywhere;
+}
+.school-eval-review-list header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.school-eval-review-list time {
+  color: var(--school-muted);
+}
+.school-eval-review-list p,
+.school-eval-my-review p {
+  margin-top: 6px;
+  white-space: pre-wrap;
+}
+.school-eval-review-form > label {
+  display: grid;
+  gap: 4px;
+  margin-block: 10px;
+}
+.school-eval-review-form textarea {
+  width: 100%;
+}
+.admin-schools {
+  min-width: 0;
+}
+.admin-schools-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 2fr);
+  gap: 14px;
+  align-items: start;
+}
+.admin-school-section {
+  min-width: 0;
+  background: white;
+  color: #14243a;
+  border: 1px solid #dce5f2;
+  border-radius: 8px;
+  padding: 14px;
+  overflow-wrap: anywhere;
+}
+.admin-school-section form {
+  display: grid;
+  gap: 8px;
+  margin-block: 10px;
+}
+.admin-school-section label {
+  display: grid;
+  gap: 4px;
+}
+.admin-school-section form > button {
+  justify-self: start;
+}
+.admin-school-fields {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+}
+.admin-school-list,
+.admin-school-events {
+  list-style: none;
+  padding: 0;
+}
+.admin-school-list button {
+  display: grid;
+  text-align: start;
+  width: 100%;
+  margin-bottom: 4px;
+  background: #f4f7fd;
+  padding: 8px;
+  border-radius: 5px;
+  border: 1px solid #dce5f2;
+}
+.admin-schools button[aria-pressed="true"] {
+  background: #e0ebff;
+  color: #132e69;
+  border-color: #7e9cd5;
+}
+.admin-school-events > li {
+  border-block-start: 1px solid #dce5f2;
+  padding: 10px 0;
+}
+.admin-school-events pre,
+.admin-school-table {
+  overflow: auto;
+}
+.admin-school-table th,
+.admin-school-table td {
+  text-align: start;
+  padding: 6px;
+}
+.admin-school-table th[scope="row"] {
+  min-width: 140px;
+}
+.admin-school-table td button {
+  display: block;
+  margin-top: 6px;
+}
+@media (max-width: 860px) {
+  .admin-schools-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,3 +1,4 @@
+import { systemSettings } from "./system-settings";
 import { requestEmailLocale } from "./email-locale";
 import { sendWelcome } from "./emails";
 import type { Env } from "./index";
@@ -141,6 +142,10 @@ export async function googleOAuth(
           cookie("", 0),
         ]);
       if (!user) {
+        if (!(await systemSettings(env)).registrationOpen)
+          return redirect(origin + "/signup?error=registration_paused", [
+            cookie("", 0),
+          ]);
         user = {
           id: crypto.randomUUID(),
           email,
@@ -176,7 +181,11 @@ export async function googleOAuth(
     )
       .bind(record.locale || "fr", user.id)
       .run();
-    if(user.disabled) return Response.redirect(new URL("/login?error=admin.disabledError",req.url).toString(),302);
+    if (user.disabled)
+      return Response.redirect(
+        new URL("/login?error=admin.disabledError", req.url).toString(),
+        302,
+      );
     user.preferred_locale = record.locale || "fr";
     await env.DB.prepare("DELETE FROM email_registrations WHERE email=?")
       .bind(email)
@@ -201,6 +210,10 @@ export async function googleOAuth(
       ],
     );
   } catch (error) {
+    if (String(error).includes("registration_paused"))
+      return redirect(origin + "/signup?error=registration_paused", [
+        cookie("", 0),
+      ]);
     console.error(
       "Google OAuth failed",
       error instanceof Error ? error.message : "Unknown error",

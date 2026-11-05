@@ -85,6 +85,14 @@ export function QuestionAudio({
             setError("learn.audioUnavailable");
           }
         };
+        let lastProgress = 0;
+        a.addEventListener("timeupdate",()=>{
+          const progress=a.currentTime,delta=progress-lastProgress;lastProgress=progress;
+          if(!a.paused&&!a.seeking&&delta>0&&delta<1.5&&document.visibilityState==='visible') {
+            const end=Date.now();window.dispatchEvent(new CustomEvent('aditou-audio-progress',{detail:{questionId,start:end-delta/a.playbackRate*1000,end}}));
+          }
+        });
+        a.addEventListener('seeking',()=>{lastProgress=a.currentTime;});
         audio.current = a;
       }
       audio.current.currentTime = 0;

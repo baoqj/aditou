@@ -25,16 +25,13 @@ function syncEmailLanguage(language: string) {
     })
     .catch(() => {});
 }
-export const LANGUAGE_STORAGE_KEY = "entryexam.ui-language";
-function savedLanguage() {
-  try {
-    const linked = new URLSearchParams(location.search).get("lang");
-    if(linked && Object.hasOwn(UI_LOCALES,linked)) return linked;
-    const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
-    return saved && Object.hasOwn(UI_LOCALES, saved) ? saved : "fr";
-  } catch {
-    return "fr";
-  }
+function pageLanguage() {
+  const linked = new URLSearchParams(location.search).get("lang");
+  if (linked && Object.hasOwn(UI_LOCALES, linked)) return linked;
+  const preferred = (navigator.languages.length ? navigator.languages : [navigator.language])
+    .map((locale) => locale.toLowerCase().split("-")[0])
+    .find((language) => Object.hasOwn(UI_LOCALES, language));
+  return preferred ?? "fr";
 }
 function applyLanguage(language: string) {
   const locale = UI_LOCALES[language as keyof typeof UI_LOCALES] || "fr-CA";
@@ -44,11 +41,7 @@ function applyLanguage(language: string) {
   document
     .querySelector('meta[name="description"]')
     ?.setAttribute("content", String(i18n.t("page.description")));
-  try {
-    localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
-  } catch {
-    // Interface language remains usable when browser storage is unavailable.
-  }
+
 }
 i18n.use(initReactI18next).init({
   resources: {
@@ -57,7 +50,7 @@ i18n.use(initReactI18next).init({
     es: { translation: es },
     zh: { translation: zh },
   },
-  lng: savedLanguage(),
+  lng: pageLanguage(),
   fallbackLng: "fr",
   supportedLngs: ["fr", "en", "es", "zh"],
   keySeparator: false,
@@ -68,6 +61,18 @@ i18n.use(initReactI18next).init({
 });
 applyLanguage(i18n.language);
 i18n.on("languageChanged", applyLanguage);
+window.addEventListener("popstate", () => {
+  const language = pageLanguage();
+  if (language !== i18n.resolvedLanguage) void i18n.changeLanguage(language);
+});
+
+export function setPageLanguage(language: string) {
+  if (!Object.hasOwn(UI_LOCALES, language)) return;
+  const url = new URL(location.href);
+  url.searchParams.set("lang", language);
+  history.replaceState(history.state, "", url);
+  void i18n.changeLanguage(language);
+}
 
 export function t(key: string, options?: Record<string, unknown>): string {
   return String(i18n.t(key, { ...options, defaultValue: key }));

@@ -1,3 +1,4 @@
+import { systemSettings } from "./system-settings";
 import { requestEmailLocale } from "./email-locale";
 import type { Env } from "./index";
 import { digest, password, randomToken } from "./auth-crypto";
@@ -51,6 +52,15 @@ export async function emailAuth(
   const b = (await req.json()) as Record<string, unknown>;
   const email = normalize(b.email),
     locale = requestEmailLocale(req, b.locale);
+  if (
+    [
+      "/api/auth/register",
+      "/api/auth/resend-verification",
+      "/api/auth/verify-email",
+    ].includes(path) &&
+    !(await systemSettings(env)).registrationOpen
+  )
+    reject("system.registrationPaused", 403);
   if (path === "/api/auth/register") {
     const name = String(b.name || "")
       .trim()
@@ -95,7 +105,10 @@ export async function emailAuth(
       email,
       "verification",
       locale,
-      { name, url: APP_ORIGIN + "/verify-email?lang=" + locale + "#token=" + token },
+      {
+        name,
+        url: APP_ORIGIN + "/verify-email?lang=" + locale + "#token=" + token,
+      },
       `aditou/verify/${tokenHash}`,
     );
     return json({ verification_required: true, email }, 202);
@@ -122,7 +135,15 @@ export async function emailAuth(
         email,
         "verification",
         deliveryLocale,
-        { name: row.name, url: APP_ORIGIN + "/verify-email?lang=" + deliveryLocale + "#token=" + token },
+        {
+          name: row.name,
+          url:
+            APP_ORIGIN +
+            "/verify-email?lang=" +
+            deliveryLocale +
+            "#token=" +
+            token,
+        },
         `aditou/verify/${tokenHash}`,
       );
     }
@@ -214,7 +235,8 @@ export async function emailAuth(
           locale,
           {
             name: user.name,
-            url: APP_ORIGIN + "/reset-password?lang=" + locale + "#token=" + token,
+            url:
+              APP_ORIGIN + "/reset-password?lang=" + locale + "#token=" + token,
           },
           `aditou/reset/${tokenHash}`,
           user.id,

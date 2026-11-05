@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { t } from "../i18n";
+import { setPageLanguage, t } from "../i18n";
 export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
   const { i18n } = useTranslation();
   return (
@@ -13,9 +13,7 @@ export function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
         aria-label={t("ui.language")}
         title={t("ui.language.help")}
         value={i18n.resolvedLanguage || "fr"}
-        onChange={(e) => {
-          void i18n.changeLanguage(e.target.value);
-        }}
+        onChange={(e) => setPageLanguage(e.target.value)}
       >
         <option value="en">English</option>
         <option value="fr">Français</option>

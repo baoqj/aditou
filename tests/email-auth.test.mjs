@@ -13,7 +13,7 @@ const compile = (file) =>
     })
     .outputText.replace(/^import .*;\n/gm, "")
     .replace(/^export \{.*\} from .*;\n/gm, "");
-const code = ["auth-crypto.ts", "email-locale.ts", "emails.ts", "email-auth.ts"]
+const code = ["auth-crypto.ts", "email-locale.ts", "emails.ts", "tts-settings.ts", "system-settings.ts", "email-auth.ts"]
   .map((f) => compile("../worker/" + f))
   .join("\n");
 const { emailAuth, digest, password, emailTemplate, sendEmail } = await import(
@@ -52,6 +52,8 @@ function setup() {
       "utf8",
     ),
   );
+  db.exec(readFileSync(new URL("../migrations/0016_feedback.sql", import.meta.url), "utf8"));
+  db.exec(readFileSync(new URL("../migrations/0029_admin_dashboard.sql", import.meta.url), "utf8"));
   const tasks = [];
   const wrap = (sql, args = []) => ({
     bind(...values) {
