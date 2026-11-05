@@ -13,6 +13,7 @@ export function AccountMenu({
   busy,
   onDashboard,
   onSettings,
+  onContact,
   onLogout,
 }: {
   name: string;
@@ -20,6 +21,7 @@ export function AccountMenu({
   busy: boolean;
   onDashboard?: () => void;
   onSettings: () => void;
+  onContact?: () => void;
   onLogout: () => void;
 }) {
   const [open, setOpen] = useState(false),
@@ -135,6 +137,7 @@ export function AccountMenu({
             <Settings size={16} />
             {t("account.settings")}
           </button>
+          {onContact && <button role="menuitem" onClick={()=>{setOpen(false);onContact();}}><Settings size={16}/>{t("feedback.title")}</button>}
           <button
             role="menuitem"
             className="account-menu-logout"

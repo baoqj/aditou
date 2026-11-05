@@ -18,6 +18,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { t } from "../i18n";
+import { PublicFooter } from "./PublicFooter";
 import { PublicHeader } from "./PublicHeader";
 import "./marketing.css";
 export function MarketingPage() {
@@ -27,7 +28,7 @@ export function MarketingPage() {
   const correct =
     answer.trim() !== "" && Number(answer.replace(",", ".")) === 7;
   const roles = [
-    { id: "schools", key: "school", icon: Building2, path: "/login" },
+    { id: "organization", key: "school", icon: Building2, path: "/login" },
     {
       id: "teachers",
       key: "teacher",
@@ -327,27 +328,7 @@ export function MarketingPage() {
           </div>
         </section>
       </main>
-      <footer className="marketing-footer">
-        <div className="public-container">
-          <div>
-            <a href="/" className="marketing-footer-brand">
-              <BookOpen size={18} />
-              {t("brand.name")}
-            </a>
-            <p>{t("marketing.footer.independent")}</p>
-          </div>
-          <div className="marketing-footer-links">
-            <a href="/#features">{t("marketing.nav.features")}</a>
-            <a href="/login">{t("marketing.login")}</a>
-            <a href="/signup">{t("marketing.signup")}</a>
-          </div>
-          <small>
-            {t("marketing.footer.copyright", {
-              year: new Date().getFullYear(),
-            })}
-          </small>
-        </div>
-      </footer>
+      <PublicFooter />
     </div>
   );
 }

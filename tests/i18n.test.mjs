@@ -63,6 +63,10 @@ test("Every hardcoded UI text and accessible label is translated, except names a
     "123",
     "1 2 3",
     "· v",
+    // Fixed unit, file format and brand.
+    "km",
+    "CSV",
+    "Aditou ·",
   ]);
   const failures = [];
   function walk(node) {
@@ -84,7 +88,9 @@ test("Every hardcoded UI text and accessible label is translated, except names a
         "subtitle",
         "eyebrow",
       ].includes(node.name.getText(source)) &&
-      /[A-Za-zÀ-ÿ]/.test(node.initializer.text)
+      /[A-Za-zÀ-ÿ]/.test(node.initializer.text) &&
+      !(node.name.getText(source) === "placeholder" &&
+        ["H2X 1Y4", "https://"].includes(node.initializer.text))
     )
       failures.push(node.initializer.text);
     if (

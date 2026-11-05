@@ -348,7 +348,7 @@ export async function sendWelcome(
       ? "/family"
       : user.role === "student"
         ? "/learn"
-        : "/org/main/manage/bank";
+        : "/bank";
   return sendEmail(
     env,
     user.email,

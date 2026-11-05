@@ -1,0 +1,15 @@
+CREATE TABLE analytics_targets(kind TEXT NOT NULL CHECK(kind IN ('assignment','classroom')),context_id TEXT NOT NULL,learner_id TEXT NOT NULL REFERENCES learners(id),provenance TEXT NOT NULL DEFAULT 'frozen',PRIMARY KEY(kind,context_id,learner_id));
+INSERT INTO analytics_targets SELECT 'assignment',a.id,en.learner_id,'legacy_roster' FROM assignments a JOIN enrollments en ON en.class_id=a.class_id;
+INSERT INTO analytics_targets SELECT 'classroom',c.id,en.learner_id,'legacy_roster' FROM classrooms c JOIN enrollments en ON en.class_id=c.class_id;
+CREATE TABLE analytics_cohorts(kind TEXT NOT NULL,context_id TEXT NOT NULL,provenance TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(kind,context_id));
+INSERT INTO analytics_cohorts SELECT 'assignment',id,'legacy_roster',created_at FROM assignments;
+INSERT INTO analytics_cohorts SELECT 'classroom',id,'legacy_roster',created_at FROM classrooms;
+CREATE TABLE organization_class_grants(org_id TEXT NOT NULL REFERENCES organizations(id),class_id TEXT NOT NULL REFERENCES classes(id),granted_by TEXT NOT NULL REFERENCES accounts(id),created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(org_id,class_id));
+INSERT OR IGNORE INTO organization_class_grants SELECT o.id,c.id,o.owner_id,CURRENT_TIMESTAMP FROM organizations o JOIN classes c ON c.teacher_id=o.owner_id;
+CREATE TABLE learning_intervals(id TEXT PRIMARY KEY,learner_id TEXT NOT NULL REFERENCES learners(id),question_id TEXT NOT NULL REFERENCES questions(id),context TEXT NOT NULL CHECK(context IN ('private','assignment','classroom')),context_id TEXT NOT NULL DEFAULT '',kind TEXT NOT NULL CHECK(kind IN ('interaction','listening','reading')),started_at INTEGER NOT NULL,ended_at INTEGER NOT NULL,rule_version TEXT NOT NULL DEFAULT 'activity-v1');
+CREATE INDEX learning_interval_owner ON learning_intervals(learner_id,started_at);
+CREATE INDEX learning_interval_context ON learning_intervals(context,context_id,started_at);
+CREATE TABLE teaching_intervals(id TEXT PRIMARY KEY,classroom_id TEXT NOT NULL REFERENCES classrooms(id),teacher_id TEXT NOT NULL REFERENCES accounts(id),started_at INTEGER NOT NULL,ended_at INTEGER NOT NULL,reason TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE grade_revisions(id TEXT PRIMARY KEY,attempt_id TEXT NOT NULL REFERENCES attempts(id),actor_id TEXT NOT NULL,previous_status TEXT NOT NULL,status TEXT NOT NULL,previous_score INTEGER,score INTEGER,reason TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE analytics_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+INSERT INTO analytics_metadata VALUES('tracking_since',strftime('%Y-%m-%dT%H:%M:%fZ','now'));

@@ -24,17 +24,22 @@ async function setup() {
     "0001_schema.sql",
     "0005_gateway_audio.sql",
     "0006_studio_tts_settings.sql",
+    "0007_assessment_runs.sql",
     "0008_exam_content.sql",
     "0011_google_oauth.sql",
     "0012_email_auth.sql",
     "0013_signup_password_setup.sql",
     "0014_email_languages.sql",
     "0015_admin_directory.sql",
+    "0022_account_activity.sql",
   ])
     db.exec(readFileSync("migrations/" + f, "utf8"));
   const wrap = (sql, args = []) => ({
     bind(...a) {
       return wrap(sql, a);
+    },
+    async execute() {
+      return /^SELECT/i.test(sql.trim()) ? this.all() : this.run();
     },
     async first() {
       return db.prepare(sql).get(...args) || null;
@@ -48,7 +53,7 @@ async function setup() {
     },
   });
   const env = {
-    DB: { prepare: (sql) => wrap(sql) },
+    DB: { prepare: (sql) => wrap(sql), batch: (items) => Promise.all(items.map(item => item.execute())) },
     ASSETS: { fetch: () => new Response("asset") },
   };
   for (const [id, role] of [
@@ -192,4 +197,28 @@ test("Admin directories enforce permissions, filter and paginate, update names a
  for(let i=0;i<30;i++)db.prepare("INSERT INTO accounts(id,email,name,role,password_hash,salt) VALUES(?,?,?,'student','','')").run('p'+i,'p'+i+'@example.com','Paged '+i);
  result=await (await call('a','/admin/users?filter=student&page=1')).json();assert.equal(result.total,31);assert.equal(result.items.length,25);
  const page2=await (await call('a','/admin/users?filter=student&page=2')).json();assert.equal(page2.items.length,6);assert.ok(page2.items.every(x=>!result.items.some(y=>x.id===y.id)));
+});
+
+test("User details redact credentials and show paged, account-scoped activity", async () => {
+  const { db, call } = await setup();
+  assert.equal((await call("t1", "/admin/users/t2")).status, 403);
+  assert.equal((await call("a", "/admin/users/missing")).status, 404);
+  for (let i = 0; i < 26; i++) {
+    db.prepare("INSERT INTO audit_log(id,actor_id,action,resource_id) VALUES(?,?,?,?)")
+      .run("event-" + i, "t2", "analytics.export", "private filter");
+  }
+  await call("a", "/admin/users/t2", { name: "Updated" });
+  const detail = await (await call("a", "/admin/users/t2")).json();
+  assert.equal(detail.account.name, "Updated");
+  assert.ok(detail.account.last_login);
+  assert.equal(detail.account.password_hash, undefined);
+  assert.equal(detail.account.salt, undefined);
+  assert.equal(detail.events.length, 25);
+  assert.equal(detail.hasMore, true);
+  assert.ok(detail.events.every(e => e.actor_id === "t2" || e.resource_id === "t2"));
+  assert.ok(!JSON.stringify(detail).includes("private filter"));
+  const second = await (await call("a", "/admin/users/t2?page=2")).json();
+  assert.ok(second.events.some(e => e.action === "account.rename"));
+  assert.ok(second.events.some(e => e.action === "auth.login") || detail.events.some(e => e.action === "auth.login"));
+  assert.equal(second.hasMore, false);
 });

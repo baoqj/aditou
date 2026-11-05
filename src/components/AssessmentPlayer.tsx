@@ -1,3 +1,4 @@
+import { ActivityTracker } from "./ActivityTracker";
 import { hasAnswer } from "../answers";
 import { questionSkill } from "../skills";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -371,6 +372,7 @@ export function AssessmentPlayer({
             }
           }}
         >
+          <ActivityTracker questionId={q.id} context={isExam ? "private" : "assignment"} contextId={data.run.assignment_id || ""} enabled={!locked}/>
           <div className="section-head">
             <span className="eyebrow">
               {t(questionSkill(q))} · {q.locale}

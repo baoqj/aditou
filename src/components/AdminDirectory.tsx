@@ -1,3 +1,4 @@
+import { AdminUserDetail } from "./AdminUserDetail";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, Data } from "../api";
@@ -59,6 +60,20 @@ export function AdminDirectory({
       setBusy(false);
     }
   }
+  const language = new URLSearchParams(location.search).get("lang");
+  const suffix = language ? "?lang=" + encodeURIComponent(language) : "";
+  const detailId =
+    kind === "users"
+      ? /^\/users\/([^/]+)\/?$/.exec(location.pathname)?.[1]
+      : undefined;
+  if (detailId)
+    return (
+      <AdminUserDetail
+        key={detailId}
+        id={detailId}
+        listUrl={"/users" + suffix}
+      />
+    );
   return (
     <section className="admin-directory">
       <div className="admin-directory-title">
@@ -128,6 +143,7 @@ export function AdminDirectory({
               <th>{t("admin.name")}</th>
               <th>{t(kind === "users" ? "admin.email" : "admin.owner")}</th>
               {kind === "users" && <th>{t("admin.role")}</th>}
+              {kind === "users" && <th>{t("admin.lastLogin")}</th>}
               <th>{t("admin.status")}</th>
               <th>{t("admin.created")}</th>
               <th>{t("admin.actions")}</th>
@@ -136,8 +152,29 @@ export function AdminDirectory({
           <tbody>
             {!loading &&
               data.items.map((row: Data) => (
-                <tr key={row.id}>
-                  <td>{row.name}</td>
+                <tr
+                  key={row.id}
+                  className={kind === "users" ? "admin-user-row" : undefined}
+                  onClick={
+                    kind === "users"
+                      ? (event) => {
+                          if (!(event.target as Element).closest("a,button"))
+                            location.assign(
+                              "/users/" + encodeURIComponent(row.id) + suffix,
+                            );
+                        }
+                      : undefined
+                  }
+                >
+                  <td>
+                    {kind === "users" ? (
+                      <a href={"/users/" + encodeURIComponent(row.id) + suffix}>
+                        {row.name}
+                      </a>
+                    ) : (
+                      row.name
+                    )}
+                  </td>
                   <td>
                     {kind === "users" ? (
                       row.email
@@ -149,6 +186,15 @@ export function AdminDirectory({
                     )}
                   </td>
                   {kind === "users" && <td>{t("admin.role." + row.role)}</td>}
+                  {kind === "users" && (
+                    <td>
+                      {row.last_login
+                        ? new Date(
+                            row.last_login.replace(" ", "T") + "Z",
+                          ).toLocaleString(i18n.resolvedLanguage)
+                        : "—"}
+                    </td>
+                  )}
                   <td>{t(row.disabled ? "admin.disabled" : "admin.active")}</td>
                   <td>
                     {new Date(

@@ -2,11 +2,13 @@ import { SupportCoffee } from "./SupportCoffee";
 import { useEffect, useRef, useState } from "react";
 import { api, type Data } from "../api";
 import { AccountMenu } from "./AccountMenu";
-import { authDestination, settingsDestination } from "../routing";
+import { authDestination, schoolRankingPath, settingsDestination } from "../routing";
 import { BookOpen } from "lucide-react";
-import { t } from "../i18n";
+import { t, UI_LOCALES } from "../i18n";
 import { LanguageSwitcher } from "./LanguageSwitcher";
-export function PublicHeader() {
+export function PublicHeader({ school = false }: { school?: boolean } = {}) {
+  const language = new URLSearchParams(location.search).get("lang");
+  const rankingUrl = schoolRankingPath + (language && Object.hasOwn(UI_LOCALES, language) ? "?lang=" + language : "");
   const [user, setUser] = useState<Data | null>(null),
     [ready, setReady] = useState(false),
     [busy, setBusy] = useState(false),
@@ -66,7 +68,7 @@ export function PublicHeader() {
   }
 
   return (
-    <header className="public-header">
+    <header className={school ? "public-header public-header-school" : "public-header"}>
       <div className="public-header-inner">
         <a className="public-brand" href="/" aria-label={t("marketing.home")}>
           <span>
@@ -79,11 +81,12 @@ export function PublicHeader() {
           aria-label={t("marketing.navigation")}
         >
           <a href="/#features">{t("marketing.nav.features")}</a>
-          <a href="/#schools">{t("marketing.nav.schools")}</a>
-          <a href="/#families">{t("marketing.nav.families")}</a>
+          <a href="/#organization">{t("marketing.nav.organization")}</a>
+          <a href="/#students">{t("marketing.nav.students")}</a>
           <a href="/#start">{t("marketing.nav.start")}</a>
         </nav>
         <div className="public-header-actions">
+          {!school && <a className="public-login" href={rankingUrl}>{t("marketing.nav.schoolRanking")}</a>}
           <SupportCoffee />
           <LanguageSwitcher compact />
           {!ready ? (
@@ -99,6 +102,7 @@ export function PublicHeader() {
                 )
               }
               onSettings={() => location.assign(settingsDestination(user.role))}
+              onContact={() => location.assign(settingsDestination(user.role)+"/contact")}
               onLogout={() => void logout()}
             />
           ) : (

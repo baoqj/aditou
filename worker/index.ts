@@ -1,3 +1,13 @@
+import { trackVisit, visitorAdmin } from "./visitors";
+import { adminFeedback } from "./admin-feedback";
+import { TTS_MODELS, ttsSelection } from "./tts-settings";
+import { systemSettings, systemAdmin, systemReply } from "./system-settings";
+import { schoolAdmin } from "./school-admin";
+import { schoolReviews, type SchoolActor } from "./school-reviews";
+import { schoolRankings } from "./school-rankings";
+import { schoolSuggestion } from "./school-suggestions";
+import { analytics } from "./analytics";
+import { feedback } from "./feedback";
 import { supportCheckout } from "./support";
 import { adminDirectory } from "./admin-directory";
 import { requestEmailLocale } from "./email-locale";
@@ -13,6 +23,9 @@ export interface Env {
   RESEND_TEMPLATE_MODE?: string;
   RESEND_FROM_EMAIL?: string;
   GOOGLE_CLIENT_ID?: string;
+  GOOGLE_MAPS_BROWSER_KEY?: string;
+  GOOGLE_MAPS_MAP_ID?: string;
+  SCHOOL_RANKINGS_PUBLIC?: string;
   GOOGLE_CLIENT_SECRET?: string;
   DB: D1Database;
   STORAGE: R2Bucket;
@@ -23,28 +36,6 @@ export interface Env {
   TTS_VOICE?: string;
 }
 type Row = Record<string, any>;
-const TTS_MODELS = [
-  {
-    id: "xai/grok-tts",
-    label: "Grok TTS",
-    voices: ["ara", "eve", "rex", "sal", "leo"],
-    defaultVoice: "ara",
-  },
-  {
-    id: "@cf/myshell-ai/melotts",
-    label: "MeloTTS",
-    voices: ["default"],
-    defaultVoice: "default",
-  },
-];
-function ttsSelection(model: unknown, voice: unknown) {
-  const selected = TTS_MODELS.find((m) => m.id === model);
-  if (!selected) fail("Modèle vocal non autorisé.");
-  const choice = String(voice || selected!.defaultVoice);
-  if (!selected!.voices.includes(choice))
-    fail("Voix non autorisée pour ce modèle.");
-  return { model: selected!.id, voice: choice };
-}
 const enc = new TextEncoder();
 const id = () => crypto.randomUUID();
 const hex = (a: ArrayBuffer) =>
@@ -194,11 +185,12 @@ async function synthesizeQuestion(
     "SELECT model,voice FROM question_tts_settings WHERE question_id=?",
     q!.id,
   );
+  const defaults = await systemSettings(e);
   const { model, voice } = ttsSelection(
-    b.model || saved?.model || e.TTS_MODEL || "xai/grok-tts",
+    b.model || saved?.model || defaults.ttsModel,
     b.voice ||
       (b.model && b.model !== saved?.model ? undefined : saved?.voice) ||
-      undefined,
+      (!b.model || b.model===defaults.ttsModel ? defaults.ttsVoice : undefined),
   );
   const language = q!.locale === "en-CA" ? "en" : "fr";
   if (
@@ -367,6 +359,36 @@ async function handle(req: Request, e: Env, ctx: ExecutionContext): Promise<Resp
     fail("Origine refusée.", 403);
   if (Number(req.headers.get("Content-Length") || 0) > 22 * 1024 * 1024)
     fail("Fichier trop volumineux.", 413);
+  if (p === "/api/school-map/config" && method === "GET") {
+    return json({ key: e.GOOGLE_MAPS_BROWSER_KEY ?? "", mapId: e.GOOGLE_MAPS_MAP_ID ?? "" });
+  }
+  if (method === "GET" && (p === "/api/school-rankings" || p.startsWith("/api/school-rankings/")))
+    return schoolRankings(url, e);
+  if (method === "GET" && (p === "/api/school" || /^\/api\/school\/[a-z0-9-]+$/i.test(p))) {
+    if (p === "/api/school") {
+      const { results } = await e.DB.prepare(`
+        SELECT c.id,c.record,c.facts,COALESCE(s.remote,0) remote
+        FROM school_campus_profiles c LEFT JOIN school_campus_supplements s ON s.campus_id=c.id ORDER BY c.id
+      `).all<{ id: string; record: string; facts: string; remote: number }>();
+      return json(results.map(({ id, record, facts, remote }) => ({
+        id, record: JSON.parse(record), facts: JSON.parse(facts), remote: Boolean(remote),
+      })));
+    }
+    const campus = await e.DB.prepare(`
+      SELECT c.id,c.record,c.facts,s.data supplement,COALESCE(s.remote,0) remote,
+        (SELECT json_object('sourceUrl',r.source_url,'updatedAt',r.created_at) FROM school_profile_revisions r
+          WHERE r.campus_id=c.id ORDER BY r.version DESC LIMIT 1) AS profileRevision
+      FROM school_campus_profiles c LEFT JOIN school_campus_supplements s ON s.campus_id=c.id WHERE c.id=?
+    `).bind(p.slice("/api/school/".length))
+      .first<{ id: string; record: string; facts: string; supplement: string | null; remote: number; profileRevision: string | null }>();
+    if (!campus) return json({ error: "School campus not found" }, 404);
+    return json({
+      id: campus.id, record: JSON.parse(campus.record), facts: JSON.parse(campus.facts),
+      remote: Boolean(campus.remote), supplement: campus.supplement ? JSON.parse(campus.supplement) : null,
+      profileRevision: campus.profileRevision ? JSON.parse(campus.profileRevision) : null,
+    });
+  }
+  if (p === "/api/site/settings" && method === "GET") return systemReply({registrationOpen:(await systemSettings(e)).registrationOpen});
   if (p === "/api/health") return json({ ok: true, service: "entryexam" });
   if (p === "/api/support/checkout") return supportCheckout(req,e.STUDYAI);
   if (["/api/auth/register","/api/auth/resend-verification","/api/auth/verify-email","/api/auth/forgot-password","/api/auth/reset-password"].includes(p)) return emailAuth(req,e,ctx);
@@ -425,12 +447,24 @@ async function handle(req: Request, e: Env, ctx: ExecutionContext): Promise<Resp
         Date.now(),
       )
     : null;
+  if (p === "/api/visits") return trackVisit(req,e,u?{id:u.id,disabled:u.disabled}:null);
+  const reviewPath = /^\/api\/school\/([a-z0-9-]+)\/reviews$/i.exec(p);
+  if (reviewPath) return schoolReviews(req, e.DB, reviewPath[1], u as SchoolActor | null);
+  const schoolSuggestionPath = /^\/api\/school\/([a-z0-9-]+)\/suggestions$/i.exec(p);
+  if (schoolSuggestionPath && method === "POST")
+    return schoolSuggestion(req, e, u as Parameters<typeof schoolSuggestion>[2], schoolSuggestionPath[1]);
+  if(p === "/api/feedback") return feedback(req,e,u);
   if(p === "/api/auth/language" && method === "POST") {
     if(u) await run(e,"UPDATE accounts SET preferred_locale=? WHERE id=?",requestEmailLocale(req,undefined,u.preferred_locale),u.id);
     return new Response(null,{status:204,headers:{"Cache-Control":"no-store"}});
   }
   if (!u) fail("Connectez-vous pour continuer.", 401);
   if (u!.disabled) fail("admin.disabledError",403);
+  if (p === "/api/admin/system") return systemAdmin(req,e,{id:u!.id,role:u!.role});
+  if (p === "/api/admin/feedback") return adminFeedback(req,e,{role:u!.role});
+  if (p === "/api/admin/visitors") return visitorAdmin(req,e,{role:u!.role});
+  if (p.startsWith("/api/analytics/")) return analytics(req,e,u!,p);
+  if (p === "/api/admin/schools" || p.startsWith("/api/admin/schools/")) return schoolAdmin(req,e.DB,u as SchoolActor,p);
   if (p.startsWith("/api/admin/")) return adminDirectory(req,e,u!,p);
   if (p === "/api/runs" || p.startsWith("/api/runs/"))
     return assessments(req, e, u!, p);
@@ -441,6 +475,7 @@ async function handle(req: Request, e: Env, ctx: ExecutionContext): Promise<Resp
       "DELETE FROM auth_sessions WHERE token_hash=?",
       await digest(token!),
     );
+    await audit(e, u!, "auth.logout", u!.id);
     return json({ ok: true }, 200, {
       "Set-Cookie":
         "entryexam_session=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0",
@@ -514,6 +549,9 @@ async function handle(req: Request, e: Env, ctx: ExecutionContext): Promise<Resp
           )
         : [];
     return json({
+      reminders: l ? await all(e,
+        "SELECT r.id,r.created_at,a.name FROM student_reminders r JOIN accounts a ON a.id=r.sender_id WHERE r.learner_id=? ORDER BY r.created_at DESC,r.id LIMIT 5", l.id
+      ) : [],
       user: safeUser(u!),
       learner: l,
       classes,
@@ -528,7 +566,7 @@ async function handle(req: Request, e: Env, ctx: ExecutionContext): Promise<Resp
       children,
       ttsConfigured: !!e.AI,
       ttsProvider: "Cloudflare AI Gateway",
-      ttsModel: e.TTS_MODEL || "xai/grok-tts",
+      ttsModel: (await systemSettings(e)).ttsModel,
       staff,
     });
   }
@@ -640,26 +678,68 @@ async function handle(req: Request, e: Env, ctx: ExecutionContext): Promise<Resp
     await audit(e, u!, "question.retire", qid);
     return json({ ok: true });
   }
+  if (p === "/api/roster/reminders" && method === "POST") {
+    if (u!.role !== "teacher") fail("Accès refusé.", 403);
+    const b = await req.json() as Row;
+    if (typeof b.learner_id !== "string") fail("Élève introuvable.");
+    const result = await e.DB.prepare(`
+      INSERT INTO student_reminders (id, learner_id, sender_id)
+      SELECT ?, l.id, ? FROM learners l
+      WHERE l.id=? AND EXISTS (
+        SELECT 1 FROM enrollments en JOIN classes c ON c.id=en.class_id
+        WHERE en.learner_id=l.id AND c.teacher_id=?
+      ) AND NOT EXISTS (
+        SELECT 1 FROM student_reminders r WHERE r.learner_id=l.id
+        AND r.sender_id=? AND r.created_at >= datetime('now', '-1 day')
+      )
+    `).bind(id(), u!.id, b.learner_id, u!.id, u!.id).run();
+    if (!result.meta.changes) fail("roster.reminderUnavailable", 403);
+    return json({ ok: true });
+  }
+  if (p === "/api/roster/status" && method === "POST") {
+    if (u!.role !== "teacher") fail("Accès refusé.", 403);
+    const b = await req.json() as Row;
+    if (typeof b.learner_id !== "string" || typeof b.active !== "boolean") fail("organization.invalidStudentStatus");
+    const result = await e.DB.prepare(`
+      INSERT INTO organization_student_status (org_id, learner_id, active)
+      SELECT o.id, en.learner_id, ?
+      FROM organizations o JOIN organization_class_grants g ON g.org_id=o.id
+      JOIN enrollments en ON en.class_id=g.class_id
+      WHERE o.owner_id=? AND en.learner_id=?
+      GROUP BY o.id, en.learner_id
+      ON CONFLICT (org_id, learner_id) DO UPDATE SET active=excluded.active
+    `).bind(Number(b.active), u!.id, b.learner_id).run();
+    if (!result.meta.changes) fail("Accès refusé.", 403);
+    await audit(e, u!, "organization.student.status", b.learner_id);
+    return json({ ok: true });
+  }
   if (p === "/api/roster") {
     if (!isStaff(u!)) fail("Accès refusé.", 403);
-    if (method === "GET")
+    if (method === "GET") {
+      const admin = u!.role === "admin";
+      const organization = admin ? null : await one(e, "SELECT id FROM organizations WHERE owner_id=?", u!.id);
+      const scope = admin ? "" : organization
+        ? "JOIN organization_class_grants g ON g.class_id=c.id AND g.org_id=? LEFT JOIN organization_student_status os ON os.org_id=g.org_id AND os.learner_id=l.id"
+        : "WHERE c.teacher_id=?";
+      const students = await all(e, `
+        SELECT l.id,l.alias,l.grade,a.email,a.id account_id,a.disabled,
+          group_concat(c.name, ', ') classes
+          ${organization ? ",COALESCE(os.active,1) organization_active" : ""}
+        FROM learners l JOIN accounts a ON a.id=l.account_id
+        LEFT JOIN enrollments en ON en.learner_id=l.id LEFT JOIN classes c ON c.id=en.class_id
+        ${scope}
+        GROUP BY l.id
+        ORDER BY l.alias, l.id
+      `, ...(admin ? [] : [organization?.id ?? u!.id]));
       return json({
-        students: await all(
-          e,
-          `SELECT l.id,l.alias,l.grade,a.email,group_concat(c.name, ', ') classes FROM learners l JOIN accounts a ON a.id=l.account_id LEFT JOIN enrollments en ON en.learner_id=l.id LEFT JOIN classes c ON c.id=en.class_id ${u!.role === "admin" ? "" : "WHERE c.teacher_id=?"} GROUP BY l.id`,
-          ...(u!.role === "admin" ? [] : [u!.id]),
-        ),
-        teachers:
-          u!.role === "admin"
-            ? await all(
-                e,
-                "SELECT id,name,email FROM accounts WHERE role IN ('admin','teacher')",
-              )
-            : [],
+        students,
+        organization,
+        teachers: admin ? await all(e, "SELECT id,name,email FROM accounts WHERE role IN ('admin','teacher')") : [],
       });
+    }
     if (method === "POST") {
       const b = (await req.json()) as Row;
-      if (b.role === "teacher" && u!.role !== "admin")
+      if (u!.role !== "admin")
         fail("Accès refusé.", 403);
       if (
         !b.email ||
@@ -707,7 +787,7 @@ async function handle(req: Request, e: Env, ctx: ExecutionContext): Promise<Resp
     }
   }
   if (p === "/api/enrollments" && method === "POST") {
-    if (!isStaff(u!)) fail("Accès refusé.", 403);
+    if (u!.role !== "admin") fail("Accès refusé.", 403);
     const b = (await req.json()) as Row;
     await canClass(e, u!, b.class_id);
     if (method === "POST")
@@ -754,16 +834,11 @@ async function handle(req: Request, e: Env, ctx: ExecutionContext): Promise<Resp
       fail("Sélectionnez des exercices publiés.");
     if (!b.title || !b.due_at) fail("Titre et date requis.");
     const aid = id();
-    await run(
-      e,
-      "INSERT INTO assignments(id,class_id,teacher_id,title,due_at,question_ids) VALUES(?,?,?,?,?,?)",
-      aid,
-      b.class_id,
-      u!.id,
-      b.title,
-      b.due_at,
-      JSON.stringify(qs.map((q) => q.id)),
-    );
+    await e.DB.batch([
+      e.DB.prepare("INSERT INTO assignments(id,class_id,teacher_id,title,due_at,question_ids) VALUES(?,?,?,?,?,?)").bind(aid,b.class_id,u!.id,b.title,b.due_at,JSON.stringify(qs.map(q=>q.id))),
+      e.DB.prepare("INSERT INTO analytics_cohorts(kind,context_id,provenance) VALUES('assignment',?,'frozen')").bind(aid),
+      e.DB.prepare("INSERT INTO analytics_targets(kind,context_id,learner_id) SELECT 'assignment',?,learner_id FROM enrollments WHERE class_id=?").bind(aid,b.class_id),
+    ]);
     return json({ id: aid });
   }
   if (p === "/api/classrooms" && method === "POST") {
@@ -776,16 +851,11 @@ async function handle(req: Request, e: Env, ctx: ExecutionContext): Promise<Resp
       fail("Sélectionnez des exercices publiés.");
     const sid = id(),
       code = id().slice(0, 8).toUpperCase();
-    await run(
-      e,
-      "INSERT INTO classrooms(id,class_id,teacher_id,title,code,question_ids) VALUES(?,?,?,?,?,?)",
-      sid,
-      b.class_id,
-      u!.id,
-      b.title || "Classe en direct",
-      code,
-      JSON.stringify(qs.map((q) => q.id)),
-    );
+    await e.DB.batch([
+      e.DB.prepare("INSERT INTO classrooms(id,class_id,teacher_id,title,code,question_ids) VALUES(?,?,?,?,?,?)").bind(sid,b.class_id,u!.id,b.title || "Classe en direct",code,JSON.stringify(qs.map(q=>q.id))),
+      e.DB.prepare("INSERT INTO analytics_cohorts(kind,context_id,provenance) VALUES('classroom',?,'frozen')").bind(sid),
+      e.DB.prepare("INSERT INTO analytics_targets(kind,context_id,learner_id) SELECT 'classroom',?,learner_id FROM enrollments WHERE class_id=?").bind(sid,b.class_id),
+    ]);
     return json({ id: sid, code });
   }
   if (p === "/api/classrooms/join" && method === "POST") {
@@ -866,6 +936,7 @@ async function handle(req: Request, e: Env, ctx: ExecutionContext): Promise<Resp
         attempts = attempts.map((a) => ({ ...a, status: "submitted" }));
     }
     return json({
+      targets: isStaff(u!) ? await all(e,"SELECT t.learner_id,l.alias,t.provenance FROM analytics_targets t JOIN learners l ON l.id=t.learner_id WHERE t.kind='classroom' AND t.context_id=? ORDER BY l.alias",c!.id) : undefined,
       classroom: { ...c, question_ids: JSON.parse(c!.question_ids) },
       question: q
         ? isStaff(u!)
@@ -1067,22 +1138,11 @@ async function handle(req: Request, e: Env, ctx: ExecutionContext): Promise<Resp
       !["correct", "partial", "incorrect", "pending_manual"].includes(b.status)
     )
       fail("Note invalide.");
-    await run(
-      e,
-      "UPDATE attempts SET status=?,score=?,feedback=?,reviewer_id=?,reviewer_role=? WHERE id=?",
-      b.status,
-      b.status === "pending_manual"
-        ? null
-        : b.status === "correct"
-          ? 2
-          : b.status === "partial"
-            ? 1
-            : 0,
-      String(b.feedback || "").slice(0, 2000),
-      u!.id,
-      u!.role,
-      a!.id,
-    );
+    const nextScore=b.status === "pending_manual" ? null : b.status === "correct" ? 2 : b.status === "partial" ? 1 : 0;
+    await e.DB.batch([
+      e.DB.prepare("UPDATE attempts SET status=?,score=?,feedback=?,reviewer_id=?,reviewer_role=? WHERE id=?").bind(b.status,nextScore,String(b.feedback || "").slice(0,2000),u!.id,u!.role,a!.id),
+      e.DB.prepare("INSERT INTO grade_revisions(id,attempt_id,actor_id,previous_status,status,previous_score,score,reason) VALUES(?,?,?,?,?,?,?,?)").bind(id(),a!.id,u!.id,a!.status,b.status,a!.score,nextScore,String(b.feedback || "").slice(0,2000)),
+    ]);
     if (a!.run_id)
       await run(
         e,
@@ -1304,6 +1364,7 @@ async function handle(req: Request, e: Env, ctx: ExecutionContext): Promise<Resp
     if (!isStaff(u!)) fail("Accès refusé.", 403);
     if (method === "GET")
       return json({
+        ...await systemSettings(e),
         models: TTS_MODELS,
         settings: await all(
           e,
@@ -1344,15 +1405,27 @@ export default {
       const r = await handle(req, e, ctx);
       const headers = new Headers(r.headers);
       headers.set("X-Content-Type-Options", "nosniff");
-      headers.set("Referrer-Policy", "same-origin");
+      const schoolMap = /^\/school(?:\/ranking)?\/?$/i.test(new URL(req.url).pathname) &&
+        Boolean(e.GOOGLE_MAPS_BROWSER_KEY && e.GOOGLE_MAPS_MAP_ID);
+      headers.set("Referrer-Policy", schoolMap ? "strict-origin-when-cross-origin" : "same-origin");
       headers.set("Permissions-Policy", "camera=(), microphone=(self)");
       headers.set("X-Frame-Options", "DENY");
-      headers.set(
-        "Content-Security-Policy",
-        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
-      );
+      const mapsHosts = " https://maps.googleapis.com https://maps.gstatic.com";
+      headers.set("Content-Security-Policy", [
+        "default-src 'self'",
+        "script-src 'self'" + (schoolMap ? mapsHosts : ""),
+        "style-src 'self' 'unsafe-inline'" + (schoolMap ? " https://fonts.googleapis.com" : ""),
+        "img-src 'self' data: blob:" + (schoolMap ? mapsHosts + " https://*.googleapis.com https://*.gstatic.com https://*.googleusercontent.com" : ""),
+        "media-src 'self' blob:",
+        "connect-src 'self'" + (schoolMap ? mapsHosts + " https://*.googleapis.com" : ""),
+        "font-src 'self'" + (schoolMap ? " https://fonts.gstatic.com" : ""),
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+      ].join("; "));
       return new Response(r.body, { status: r.status, headers });
     } catch (err: any) {
+      if (String(err.message).includes("registration_paused")) return systemReply({error:"system.registrationPaused"},403);
       if (!err.status) console.error("API error", err);
       return json(
         {
